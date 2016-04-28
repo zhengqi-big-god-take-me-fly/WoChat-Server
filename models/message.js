@@ -9,9 +9,11 @@ var messageSchema = new Schema({
     receiver_id: ObjectId,
     time: Number,
     content: {
-        type: Number,
+        type: { type: Number },
         plain: String
     }
+}, {
+    versionKey: false
 });
 
 var Message =  module.exports = mongoose.model('Message', messageSchema);
