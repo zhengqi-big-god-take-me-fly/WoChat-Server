@@ -6,8 +6,18 @@
 
 var http = require('http');
 var debug = require('debug')('WoChat-Server:http');
+var mongooseDebug = require('debug')('WoChat-Server:db');
 var httpServer = require('../http');
 var socketServer = require('../socket');
+var mongoose = require('mongoose');
+
+// Use ES6 Promises in Mongoose.
+mongoose.Promise = Promise;
+
+// Connect to mongodb
+mongoose.connect('mongodb://localhost:27017/WoChat');
+mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
+mongoose.connection.once('open', mongooseDebug.bind(mongooseDebug, 'MongoDB connected successfully!'));
 
 /**
  * Get httpPort from environment and store in Express.
