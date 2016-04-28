@@ -10,9 +10,11 @@ var userSchema = new Schema({
     avatar: String,
     gender: Number,
     region: Number,
+    // Test
+    type: String,
     contacts_id: [ObjectId]
 }, {
     versionKey: false
 });
 
-var User = module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema);
