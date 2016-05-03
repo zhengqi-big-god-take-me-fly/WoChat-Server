@@ -9,6 +9,7 @@ module.exports = {
     messageContentPlain: messageContentPlain,
     messageContentType: messageContentType,
     nickname: nickname,
+    password: password,
     region: region,
     timestamp: timestamp,
     userId: userId,
@@ -44,6 +45,10 @@ function messageContentType(mct) {
 }
 
 function nickname(n) {
+    return true;
+}
+
+function password(p) {
     return true;
 }
 
