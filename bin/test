@@ -6,6 +6,7 @@ var debug = require('debug')('WoChat-Server:test');
 var http = require('http');
 var querystring = require('querystring');
 var mongoose = require('mongoose');
+var jwt = require('jsonwebtoken');
 
 // Use ES6 Promises in Mongoose.
 mongoose.Promise = Promise;
@@ -76,6 +77,8 @@ function httpPost(headers, path, query, data) {
     });
 }
 
+var userId;
+
 before(function (done) {
     mongoose.connect(config.dbpath);
     mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
@@ -84,12 +87,11 @@ before(function (done) {
         done();
     });
 });
-describe('users', function () {
+describe('/users', function () {
     before('clear user database', function () {
         return User.remove({}).exec();
     });
-    var userId;
-    describe('POST', function () {
+    describe('注册', function () {
         it('正常注册', function() {
             var postData = {
                 username: 'tidyzq',
@@ -121,7 +123,8 @@ describe('users', function () {
                 username: '',
                 password: '',
             };
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            // return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            return httpPost(null, '/users', null, postData)
             .then(function (res) {
                 assert.equal(400, res.statusCode);
             });
@@ -145,7 +148,7 @@ describe('users', function () {
             });
         });
     });
-    describe('Get', function () {
+    describe('获取用户信息', function () {
         it('正常获取', function () {
             return httpGet(null, '/users/' + userId, null)
             .then(function (res) {
@@ -160,7 +163,7 @@ describe('users', function () {
         it('获取空id', function () {
             return httpGet(null, '/users', null)
             .then(function (res) {
-                assert.equal(400, res.statusCode);
+                assert.equal(404, res.statusCode);
             });
         });
         it('获取错误id', function () {
@@ -182,5 +185,38 @@ describe('users', function () {
                 assert.ok(user.contacts);
             });
         })
+    });
+});
+describe('/auth', function () {
+    describe('登录', function () {
+        it('正常登陆', function () {
+            var postData = {
+                username: 'tidyzq',
+                password: '123456'
+            }
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+            .then(function (res) {
+                assert.equal(200, res.statusCode);
+                var msg = JSON.parse(res.body);
+                assert(msg.jwt);
+                return new Promise(function (resolve, reject) {
+                    jwt.verify(msg.jwt, config.secret, function (err, decoded) {
+                        assert.ifError(err);
+                        assert.equal(userId, decoded.user_id);
+                        resolve();
+                    });
+                });
+            });
+        });
+        it('错误登陆', function () {
+            var postData = {
+                username: 'tidyzq',
+                password: '123'
+            }
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
     });
 });

@@ -81,7 +81,7 @@ router.post('/', function(req, res, next) {
 });
 
 // Get User Info
-router.get(/^\/([^\/]*)$/, function(req, res, next) {
+router.get(/^\/([^\/]+)$/, function(req, res, next) {
 
     var userId       = req.params[0],
         withContacts = req.query.with_contacts;

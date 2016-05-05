@@ -3,7 +3,9 @@ var debug = require('debug')('WoChat-Server:routes:auth');
 var router = express.Router();
 
 var validator = require('../utils/validator');
+var config = require('../config');
 var mongoose = require('mongoose');
+var jwt = require('jsonwebtoken');
 
 var User = require('../models/user');
 
@@ -50,27 +52,36 @@ function handleError(error) {
 }
 
 // Sign Up
-router.post('/', function(req, res, next) {
+router.post('/login', function(req, res, next) {
 
-    var user = new User({
-        username: req.body.username,
-        password: req.body.password
-    });
+    var username = req.body.username,
+        password = req.body.password;
 
-    createUser()
+    findUser()
     .then(sendResult)
     .catch(handleError)
     .catch(sendError)
     .catch(debug);
 
-    function createUser() {
+    function findUser() {
         debug('createUser');
-        return user.save();
+        return User.findOne({
+            username: username,
+            password: password
+        }).exec()
+        .then(function (doc) {
+            return doc ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Invalid username or wrong password'));
+        });
     }
 
-    function sendResult() {
+    function sendResult(doc) {
         debug('sendResult');
-        res.end('success');
+        var payload = {
+            user_id: doc._id
+        };
+        res.json({
+            jwt: jwt.sign(payload, config.secret)
+        });
     }
 
     function sendError(error) {
