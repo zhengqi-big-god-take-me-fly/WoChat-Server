@@ -81,21 +81,36 @@ function socketCloseHandler() {
     // Stub
 }
 
+function removeGuestClient(gcid) {
+    if (gcid) {
+        var client = guestClients[gcid];
+        if (client) {
+            var sock = client['sock'];
+            if (sock && (sock.writable || sock.readable)) {
+                sock.destroy();
+            }
+            guestClients[gcid] = null;
+        }
+    }
+}
+
 function getIdSender(id) {
+    var json = JSON.stringify({
+        type: 'socket_id',
+        data: {
+            socket_id: id
+        }
+    });
     var times = 0;
     var sender = setInterval(function () {
+        ++times;
         if (times > 10) {
             clearInterval(sender);
+            removeGuestClient(id);
+            return;
         }
-        var json = {
-            type: 'socket_id',
-            data: {
-                socket_id: id
-            }
-        };
         writeToGuestClient(id, json);
-        ++times;
-    });
+    }, 3 * 1000);
     return sender;
 }
 
