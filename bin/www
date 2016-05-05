@@ -9,7 +9,7 @@ var http = require('http');
 var config = require('../config');
 var debug = require('debug')('WoChat-Server:http');
 var mongooseDebug = require('debug')('WoChat-Server:db');
-var socketServer = require('../socket');
+var SocketServer = require('../socket');
 var mongoose = require('mongoose');
 
 // Use ES6 Promises in Mongoose.
@@ -44,7 +44,7 @@ server.on('listening', onListening);
 
 var socketPort = normalizePort(process.env.WOCHAT_SOCKET_PORT || '3001');
 
-socketServer.createServer(socketPort);
+SocketServer.createServer(socketPort);
 
 /**
  * Normalize a httpPort into a number, string, or false.
