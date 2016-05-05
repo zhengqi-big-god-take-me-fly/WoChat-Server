@@ -1,5 +1,7 @@
 'use strict';
 
+var ObjectId = require('mongoose').Types.ObjectId;
+
 module.exports = {
     activityCommentText: activityCommentText,
     activityContentText: activityContentText,
@@ -49,7 +51,7 @@ function nickname(n) {
 }
 
 function password(p) {
-    return true;
+    return p && typeof p === 'string' && /^\w+$/.test(p);
 }
 
 function region(r) {
@@ -61,9 +63,9 @@ function timestamp(t) {
 }
 
 function userId(ui) {
-    return true;
+    return ui && (ui instanceof ObjectId || (typeof ui === 'string' && /^[0-9a-f]{24}$/i.test(ui)));
 }
 
 function username(u) {
-    return true;
+    return u && typeof u === 'string' && /^\w+$/.test(u);
 }

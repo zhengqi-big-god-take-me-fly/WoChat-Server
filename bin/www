@@ -6,6 +6,7 @@
 
 var httpServer = require('../http');
 var http = require('http');
+var config = require('../config');
 var debug = require('debug')('WoChat-Server:http');
 var mongooseDebug = require('debug')('WoChat-Server:db');
 var socketServer = require('../socket');
@@ -15,7 +16,7 @@ var mongoose = require('mongoose');
 mongoose.Promise = Promise;
 
 // Connect to mongodb
-mongoose.connect('mongodb://localhost:27017/WoChat');
+mongoose.connect(config.dbpath);
 mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
 mongoose.connection.once('open', mongooseDebug.bind(mongooseDebug, 'MongoDB connected successfully!'));
 
@@ -103,4 +104,7 @@ function onListening() {
         ? 'pipe ' + addr
         : 'httpPort ' + addr.port;
     debug('Listening on ' + bind);
+    if (process && process.send) {
+        process.send('ready');
+    }
 }

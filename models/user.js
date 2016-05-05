@@ -7,12 +7,12 @@ var ObjectId = Schema.Types.ObjectId;
 var userSchema = new Schema({
     // _id: ObjectId,
     username: { type: String, required: true, unique: true, validate: V.username },
-    nickname: { type: String, required: true, validate: V.nickname },
+    nickname: { type: String, default: 'null', required: true, validate: V.nickname },
     password: { type: String, required: true, validate: V.password },
-    avatar: { type: String, /* TODO: default */ required: true, validate: V.avatar },
+    avatar: { type: String, default: 'null', required: true, validate: V.avatar },
     gender: { type: Number, default: 0, required: true, validate: V.gender },
-    region: { type: Number, /* TODO: default */ required: true, validate: V.region },
-    contacts_id: [ObjectId]
+    region: { type: Number, default: 0, required: true, validate: V.region },
+    contacts: [ObjectId]
 }, {
     versionKey: false
 });

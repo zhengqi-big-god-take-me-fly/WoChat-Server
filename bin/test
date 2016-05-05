@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+
+var assert = require('assert');
+var config = require('../config');
+var debug = require('debug')('WoChat-Server:test');
+var http = require('http');
+var querystring = require('querystring');
+var mongoose = require('mongoose');
+
+// Use ES6 Promises in Mongoose.
+mongoose.Promise = Promise;
+
+var User = require('../models/user');
+
+function httpGet(headers, path, query) {
+    var qString = typeof query === 'string' ? query : querystring.stringify(query);
+    headers = (typeof headers === 'object' && headers != null) ? headers : {};
+    var options = {
+        hostname: 'localhost',
+        port: 3000,
+        path: path + (qString == '' ? '' : ('?' + qString)),
+        headers: headers
+    };
+    // debug(options);
+    return new Promise(function (resolve, reject) {
+        http.get(options, function (res) {
+            res.setEncoding('utf8');
+            var body = [];
+            res.on('data', function (chunk) {
+                body.push(chunk);
+            }).on('end', function () {
+                resolve({
+                    statusCode: res.statusCode,
+                    headers: res.headers,
+                    body: body.join()
+                });
+            });
+        }).on('error', function (err) {
+            debug('http get error', err);
+            reject();
+        });
+    });
+}
+
+function httpPost(headers, path, query, data) {
+    var qString = typeof query === 'string' ? query : querystring.stringify(query),
+        dString = typeof data === 'string' ? data : querystring.stringify(data);
+    headers = (typeof headers === 'object' && headers != null) ? headers : {};
+    headers['Content-Length'] = dString.length;
+    var options = {
+        hostname: 'localhost',
+        port: 3000,
+        path: path + (qString == '' ? '' : ('?' + qString)),
+        method: 'POST',
+        headers: headers
+    };
+    return new Promise(function (resolve, reject) {
+        var req = http.request(options, function (res) {
+            res.setEncoding('utf8');
+            var body = [];
+            res.on('data', function (chunk) {
+                body.push(chunk);
+            }).on('end', function () {
+                resolve({
+                    statusCode: res.statusCode,
+                    headers: res.headers,
+                    body: body.join()
+                });
+            });
+        }).on('error', function (err) {
+            debug('http post error', err);
+            reject();
+        });
+        req.write(dString);
+        req.end();
+    });
+}
+
+before(function (done) {
+    mongoose.connect(config.dbpath);
+    mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
+    mongoose.connection.once('open', function () {
+        debug('MongoDB connected');
+        done();
+    });
+});
+describe('users', function () {
+    before('clear user database', function () {
+        return User.remove({}).exec();
+    });
+    var userId;
+    describe('POST', function () {
+        it('正常注册', function() {
+            var postData = {
+                username: 'tidyzq',
+                password: '123456'
+            };
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            .then(function (res) {
+               assert.equal(200, res.statusCode);
+               return User.findOne({
+                    username: 'tidyzq'
+               }).exec();
+            }).then(function (doc) {
+                assert(doc);
+                assert(doc._id);
+                userId = doc._id.toString();
+                assert.equal(doc.username, 'tidyzq');
+                assert.equal(doc.password, '123456');
+            });
+        });
+        it('空参数', function () {
+            var postData = {};
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+        });
+        it('错误参数', function () {
+            var postData = {
+                username: '',
+                password: '',
+            };
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+        });
+        it('重复注册', function () {
+            var postData = {
+                username: 'tidyzq',
+                password: '123'
+            };
+            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+            .then(function (res) {
+               assert.equal(409, res.statusCode);
+               return User.findOne({
+                    username: 'tidyzq'
+               }).exec();
+            })
+            .then(function (doc) {
+                assert(doc);
+                assert.equal(doc.username, 'tidyzq');
+                assert.equal(doc.password, '123456');
+            });
+        });
+    });
+    describe('Get', function () {
+        it('正常获取', function () {
+            return httpGet(null, '/users/' + userId, null)
+            .then(function (res) {
+                assert.equal(200, res.statusCode);
+                var user = JSON.parse(res.body);
+                // debug(user);
+                assert.ok(user);
+                assert.ifError(user.password);
+                assert.ifError(user.contacts);
+            });
+        });
+        it('获取空id', function () {
+            return httpGet(null, '/users', null)
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+        });
+        it('获取错误id', function () {
+            return httpGet(null, '/users/111111111111111111111111', null)
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
+        it('附带联系人', function () {
+            return httpGet(null, '/users/' + userId, {
+                with_contacts: true
+            })
+            .then(function (res) {
+                assert.equal(200, res.statusCode);
+                var user = JSON.parse(res.body);
+                // debug(user);
+                assert.ok(user);
+                assert.ifError(user.password);
+                assert.ok(user.contacts);
+            });
+        })
+    });
+});

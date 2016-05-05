@@ -3,7 +3,7 @@
 
 # Logs
 logs
-*.log
+*.log*
 npm-debug.log*
 
 # Runtime data
@@ -34,3 +34,6 @@ node_modules
 
 # Optional REPL history
 .node_repl_history
+
+# Database file
+data
