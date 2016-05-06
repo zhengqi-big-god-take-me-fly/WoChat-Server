@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 var assert = require('assert');
-var config = require('../config');
+var config = require('../utils/config');
 var debug = require('debug')('WoChat-Server:test');
 var http = require('http');
 var querystring = require('querystring');
@@ -77,146 +77,163 @@ function httpPost(headers, path, query, data) {
     });
 }
 
-var userId;
+var userId, token;
 
 before(function (done) {
     mongoose.connect(config.dbpath);
     mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
     mongoose.connection.once('open', function () {
         debug('MongoDB connected');
-        done();
+        User.remove({}).exec().then(function () {
+            done();
+        });
     });
 });
-describe('/users', function () {
-    before('clear user database', function () {
-        return User.remove({}).exec();
-    });
-    describe('注册', function () {
-        it('正常注册', function() {
-            var postData = {
-                username: 'tidyzq',
-                password: '123456'
-            };
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
-            .then(function (res) {
-               assert.equal(200, res.statusCode);
-               return User.findOne({
-                    username: 'tidyzq'
-               }).exec();
-            }).then(function (doc) {
-                assert(doc);
-                assert(doc._id);
-                userId = doc._id.toString();
-                assert.equal(doc.username, 'tidyzq');
-                assert.equal(doc.password, '123456');
-            });
-        });
-        it('空参数', function () {
-            var postData = {};
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
-            .then(function (res) {
-                assert.equal(400, res.statusCode);
-            });
-        });
-        it('错误参数', function () {
-            var postData = {
-                username: '',
-                password: '',
-            };
-            // return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
-            return httpPost(null, '/users', null, postData)
-            .then(function (res) {
-                assert.equal(400, res.statusCode);
-            });
-        });
-        it('重复注册', function () {
-            var postData = {
-                username: 'tidyzq',
-                password: '123'
-            };
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
-            .then(function (res) {
-               assert.equal(409, res.statusCode);
-               return User.findOne({
-                    username: 'tidyzq'
-               }).exec();
-            })
-            .then(function (doc) {
-                assert(doc);
-                assert.equal(doc.username, 'tidyzq');
-                assert.equal(doc.password, '123456');
-            });
+describe('注册', function () {
+    it('正常注册', function() {
+        var postData = {
+            username: 'tidyzq',
+            password: '123456'
+        };
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        .then(function (res) {
+           assert.equal(200, res.statusCode);
+           return User.findOne({
+                username: 'tidyzq'
+           }).exec();
+        }).then(function (doc) {
+            assert(doc);
+            assert(doc._id);
+            userId = doc._id.toString();
+            assert.equal(doc.username, 'tidyzq');
+            assert.equal(doc.password, '123456');
         });
     });
-    describe('获取用户信息', function () {
-        it('正常获取', function () {
-            return httpGet(null, '/users/' + userId, null)
-            .then(function (res) {
-                assert.equal(200, res.statusCode);
-                var user = JSON.parse(res.body);
-                // debug(user);
-                assert.ok(user);
-                assert.ifError(user.password);
-                assert.ifError(user.contacts);
-            });
+    it('空参数', function () {
+        var postData = {};
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        .then(function (res) {
+            assert.equal(400, res.statusCode);
         });
-        it('获取空id', function () {
-            return httpGet(null, '/users', null)
-            .then(function (res) {
-                assert.equal(404, res.statusCode);
-            });
+    });
+    it('错误参数', function () {
+        var postData = {
+            username: '',
+            password: '',
+        };
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        .then(function (res) {
+            assert.equal(400, res.statusCode);
         });
-        it('获取错误id', function () {
-            return httpGet(null, '/users/111111111111111111111111', null)
-            .then(function (res) {
-                assert.equal(404, res.statusCode);
-            });
-        });
-        it('附带联系人', function () {
-            return httpGet(null, '/users/' + userId, {
-                with_contacts: true
-            })
-            .then(function (res) {
-                assert.equal(200, res.statusCode);
-                var user = JSON.parse(res.body);
-                // debug(user);
-                assert.ok(user);
-                assert.ifError(user.password);
-                assert.ok(user.contacts);
-            });
+    });
+    it('重复注册', function () {
+        var postData = {
+            username: 'tidyzq',
+            password: '123'
+        };
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        .then(function (res) {
+           assert.equal(409, res.statusCode);
+           return User.findOne({
+                username: 'tidyzq'
+           }).exec();
         })
+        .then(function (doc) {
+            assert(doc);
+            assert.equal(doc.username, 'tidyzq');
+            assert.equal(doc.password, '123456');
+        });
     });
 });
-describe('/auth', function () {
-    describe('登录', function () {
-        it('正常登陆', function () {
-            var postData = {
-                username: 'tidyzq',
-                password: '123456'
-            }
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
-            .then(function (res) {
-                assert.equal(200, res.statusCode);
-                var msg = JSON.parse(res.body);
-                assert(msg.jwt);
-                return new Promise(function (resolve, reject) {
-                    jwt.verify(msg.jwt, config.secret, function (err, decoded) {
-                        assert.ifError(err);
-                        assert.equal(userId, decoded.user_id);
-                        resolve();
-                    });
+describe('登录', function () {
+    it('正常登陆', function () {
+        var postData = {
+            username: 'tidyzq',
+            password: '123456'
+        }
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var msg = JSON.parse(res.body);
+            token = msg.jwt;
+            assert(token);
+            return new Promise(function (resolve, reject) {
+                jwt.verify(msg.jwt, config.secret, function (err, decoded) {
+                    assert.ifError(err);
+                    assert.equal(userId, decoded.user_id);
+                    resolve();
                 });
             });
         });
-        it('错误登陆', function () {
-            var postData = {
-                username: 'tidyzq',
-                password: '123'
-            }
-            return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
-            .then(function (res) {
-                assert.equal(401, res.statusCode);
-            });
+    });
+    it('错误登陆', function () {
+        var postData = {
+            username: 'tidyzq',
+            password: '123'
+        }
+        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+        .then(function (res) {
+            assert.equal(401, res.statusCode);
+        });
+    });
+});
+describe('获取用户信息', function () {
+    it('正常获取', function () {
+        return httpGet({
+            Authorization: token
+        }, '/users/' + userId, null)
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var user = JSON.parse(res.body);
+            // debug(user);
+            assert.ok(user);
+            assert.ifError(user.password);
+            assert.ifError(user.contacts);
+        });
+    });
+    it('附带联系人', function () {
+        return httpGet({
+            Authorization: token
+        }, '/users/' + userId, {
+            with_contacts: true
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var user = JSON.parse(res.body);
+            // debug(user);
+            assert.ok(user);
+            assert.ifError(user.password);
+            assert.ok(user.contacts);
+        });
+    });
+    it('无token获取', function () {
+        return httpGet(null, '/users/' + userId, null)
+        .then(function (res) {
+            assert.equal(401, res.statusCode);
+        });
+    });
+    it('获取错误id', function () {
+        return httpGet(null, '/users/111111111111111111111111', null)
+        .then(function (res) {
+            assert.equal(401, res.statusCode);
+        });
+    });
+});
+describe('获取用户联系人', function () {
+    it('正常获取', function () {
+        return httpGet({
+            Authorization: token
+        }, '/users/' + userId + '/contacts', null)
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var user = JSON.parse(res.body);
+            assert(user.contacts);
+        });
+    });
+    it('无token获取', function () {
+        return httpGet(null, '/users/' + userId + '/contacts', null)
+        .then(function (res) {
+            assert.equal(401, res.statusCode);
         });
     });
 });

@@ -3,7 +3,7 @@ var debug = require('debug')('WoChat-Server:routes:auth');
 var router = express.Router();
 
 var validator = require('../utils/validator');
-var config = require('../config');
+var config = require('../utils/config');
 var mongoose = require('mongoose');
 var jwt = require('jsonwebtoken');
 

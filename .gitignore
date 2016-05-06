@@ -37,3 +37,7 @@ node_modules
 
 # Database file
 data
+
+# Config file
+# Which contains path or passwords of database and secret key for token
+config.js

@@ -4,6 +4,8 @@ var router = express.Router();
 
 var validator = require('../utils/validator');
 var mongoose = require('mongoose');
+var config = require('../utils/config');
+var jwt = require('jsonwebtoken');
 
 var User = require('../models/user');
 
@@ -38,7 +40,7 @@ function handleError(error) {
                     message += 'already exists';
                 }
                 break;
-            case 'CastError':
+            case 'CastError': // invalid format
                 statusCode = 400;
                 message = 'invalid value "' + error.value + '" for ' + error.kind;
                 break;
@@ -84,19 +86,74 @@ router.post('/', function(req, res, next) {
 router.get(/^\/([^\/]+)$/, function(req, res, next) {
 
     var userId       = req.params[0],
-        withContacts = req.query.with_contacts;
+        withContacts = req.query.with_contacts,
+        token        = req.get('Authorization');
 
-    findUser()
+    verifyToken()
+    .then(findUser)
     .then(sendResult)
     .catch(handleError)
     .catch(sendError)
     .catch(debug);
 
+    function verifyToken() {
+        debug('verifyToken');
+        return new Promise(function (resolve, reject) {
+            jwt.verify(token, config.secret, function (err, decoded) {
+                (!err && decoded.user_id == userId) ? resolve() : reject(new Response(401, 'Invalid Token'));
+            });
+        });
+    }
+
     function findUser() {
         debug('findUser');
         return User.findOne({
-            '_id': userId
+            _id: userId
         }).select('-password' + (withContacts ? '' : ' -contacts'))
+        .then(function (doc) {
+            return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
+        });
+    }
+
+    function sendResult(doc) {
+        debug('sendResult');
+        res.json(doc);
+    }
+
+    function sendError(error) {
+        debug('sendError: ', error);
+        res.status(error.statusCode).end(error.message);
+    }
+
+});
+
+// Get User Contacts
+router.get(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
+
+    var userId = req.params[0],
+        token = req.get('Authorization');
+
+    verifyToken()
+    .then(findUser)
+    .then(sendResult)
+    .catch(handleError)
+    .catch(sendError)
+    .catch(debug);
+
+    function verifyToken() {
+        debug('verifyToken');
+        return new Promise(function (resolve, reject) {
+            jwt.verify(token, config.secret, function (err, decoded) {
+                (!err && decoded.user_id == userId) ? resolve() : reject(new Response(401, 'Invalid Token'));
+            });
+        });
+    }
+
+    function findUser() {
+        debug('findUser');
+        return User.findOne({
+            _id: userId
+        }).select('contacts')
         .then(function (doc) {
             return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
         });

@@ -6,7 +6,7 @@
 
 var httpServer = require('../http');
 var http = require('http');
-var config = require('../config');
+var config = require('../utils/config');
 var debug = require('debug')('WoChat-Server:http');
 var mongooseDebug = require('debug')('WoChat-Server:db');
 var SocketServer = require('../socket');
