@@ -15,7 +15,9 @@ module.exports = {
     region: region,
     timestamp: timestamp,
     userId: userId,
-    username: username
+    username: username,
+    remark: remark,
+    blockLevel: blockLevel
 };
 
 function activityCommentText(act) {
@@ -68,4 +70,12 @@ function userId(ui) {
 
 function username(u) {
     return u && typeof u === 'string' && /^\w+$/.test(u);
+}
+
+function remark(rm) {
+    return true;
+}
+
+function blockLevel(bl) {
+    return Number.isInteger(bl) && bl >= 0 && bl <= 3;
 }

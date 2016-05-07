@@ -134,7 +134,53 @@ router.get(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
         token = req.get('Authorization');
 
     verifyToken()
+    .then(findContacts)
+    .then(sendResult)
+    .catch(handleError)
+    .catch(sendError)
+    .catch(debug);
+
+    function verifyToken() {
+        debug('verifyToken');
+        return new Promise(function (resolve, reject) {
+            jwt.verify(token, config.secret, function (err, decoded) {
+                (!err && decoded.user_id == userId) ? resolve() : reject(new Response(401, 'Invalid Token'));
+            });
+        });
+    }
+
+    function findContacts() {
+        debug('findContacts');
+        return User.findOne({
+            _id: userId
+        }).select('contacts')
+        .then(function (doc) {
+            return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
+        });
+    }
+
+    function sendResult(doc) {
+        debug('sendResult');
+        res.json(doc);
+    }
+
+    function sendError(error) {
+        debug('sendError: ', error);
+        res.status(error.statusCode).end(error.message);
+    }
+
+});
+
+// Add Contact
+router.post(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
+
+    var userId = req.params[0],
+        token = req.get('Authorization'),
+        contactId = req.body.user_id;
+
+    verifyToken()
     .then(findUser)
+    .then(addContact)
     .then(sendResult)
     .catch(handleError)
     .catch(sendError)
@@ -152,16 +198,26 @@ router.get(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
     function findUser() {
         debug('findUser');
         return User.findOne({
-            _id: userId
-        }).select('contacts')
-        .then(function (doc) {
-            return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
+            _id: contactId
+        }).then(function (doc) {
+            return doc ? Promise.resolve() : Promise.reject(new Response(404, 'User not found'));
         });
     }
 
-    function sendResult(doc) {
+    function addContact() {
+        debug('addContact');
+        return User.findOneAndUpdate({
+            _id: userId
+        }, {
+            $push: {
+                user_id: contactId
+            }
+        }).exec()
+    }
+
+    function sendResult() {
         debug('sendResult');
-        res.json(doc);
+        res.end('Success');
     }
 
     function sendError(error) {

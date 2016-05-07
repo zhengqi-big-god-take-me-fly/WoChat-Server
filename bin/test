@@ -7,6 +7,7 @@ var http = require('http');
 var querystring = require('querystring');
 var mongoose = require('mongoose');
 var jwt = require('jsonwebtoken');
+var socketEvent = require('../utils/socketEvent');
 
 // Use ES6 Promises in Mongoose.
 mongoose.Promise = Promise;
@@ -89,6 +90,37 @@ before(function (done) {
         });
     });
 });
+describe('utils/socketEvent', function () {
+    var client;
+    it('建立两个client', function () {
+        client = new socketEvent.Client('1');
+        assert(client);
+    });
+    it('通信', function () {
+        var p1 = new Promise(function (resolve, reject) {
+            client.once('msg', function (message) {
+                assert.equal('hello client', message);
+                resolve();
+            });
+        });
+        var p2 = new Promise(function (resolve, reject) {
+            socketEvent.server.once('sended', function () {
+                resolve();
+            });
+        });
+        socketEvent.Client.emit('1', 'msg', 'hello client');
+        return Promise.all([p1, p2]);
+    });
+    it('离线', function () {
+        var p1 = new Promise(function (resolve, reject) {
+            socketEvent.server.once('unsend', function () {
+                resolve();
+            });
+        });
+        socketEvent.Client.emit('2', 'msg', 'hello client');
+        return p1;
+    });
+});
 describe('注册', function () {
     it('正常注册', function() {
         var postData = {
@@ -98,15 +130,6 @@ describe('注册', function () {
         return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
         .then(function (res) {
            assert.equal(200, res.statusCode);
-           return User.findOne({
-                username: 'tidyzq'
-           }).exec();
-        }).then(function (doc) {
-            assert(doc);
-            assert(doc._id);
-            userId = doc._id.toString();
-            assert.equal(doc.username, 'tidyzq');
-            assert.equal(doc.password, '123456');
         });
     });
     it('空参数', function () {
