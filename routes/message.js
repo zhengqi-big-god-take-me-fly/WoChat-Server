@@ -100,7 +100,7 @@ router.post('/', function(req, res, next) {
     }
 
     function sendMessage() {
-        debug('sendMessage');
+        debug('sendMessage', msg);
         socketEvent.Client.emit(msg.receiver_id, 'message', msg);
     }
 

@@ -196,7 +196,7 @@ router.post(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
     }
 
     function findUser() {
-        debug('findUser');
+        debug('findUser: ' + contactId);
         return User.findOne({
             _id: contactId
         }).then(function (doc) {
@@ -210,7 +210,9 @@ router.post(/^\/([^\/]+)\/contacts$/, function(req, res, next) {
             _id: userId
         }, {
             $push: {
-                user_id: contactId
+                contacts: {
+                    user_id: contactId
+                }
             }
         }).exec()
     }

@@ -5,7 +5,8 @@ var debug = require('debug')('WoChat-Server:socket');
 var socketEvent = require('./utils/socketEvent');
 var jwt = require('jsonwebtoken');
 var config = require('./utils/config');
-var Message = require('../models/message');
+var SocketBuffer = require('./utils/socketBuffer');
+var Message = require('./models/message');
 
 // var server, socketPort;
 // var clients = {};
@@ -80,8 +81,14 @@ function onError(error) {
 // }
 
 function onConnection(connection) {
+    connection.setEncoding('utf8');
     connection.setTimeout(2 * 60 * 1000); // 2 min
     connection.setNoDelay(true);
+
+    socketWriter(connection, {
+        type: 'info',
+        data: 'Hello\n'
+    });
 
     connection.on('end', function () {
         if (connection.hasOwnProperty('clientId')) {
@@ -92,7 +99,12 @@ function onConnection(connection) {
         debug('socket of client ' + connection.clientId + ' closed');
     });
 
-    connection.on('data', onData);
+    var socketBuffer = new SocketBuffer();
+    socketBuffer.on('packet', onData);
+
+    connection.on('data', function (data) {
+        socketBuffer.addBuffer(data);
+    });
 
     connection.on('timeout', function () {
         connection.end();
@@ -103,8 +115,16 @@ function onConnection(connection) {
         connection.end();
     });
 
-    function onData (data) {
-        var token = data;
+    function onData (packet) {
+        debug(packet);
+        switch (packet.type) {
+            case 'token':
+                onSignIn(packet.data);
+                break;
+        }
+    }
+
+    function onSignIn(token) {
 
         isUnSignedIn()
         .then(verifyToken)
@@ -113,10 +133,12 @@ function onConnection(connection) {
         .catch(sendError);
 
         function isUnSignedIn() {
+            debug('isUnSignedIn');
             return connection.hasOwnProperty('clientId') ? Promise.reject('Already Signed In') : Promise.resolve();
         }
 
         function verifyToken() {
+            debug('verifyToken(' + token + ')');
             return new Promise(function (resolve, reject) {
                 jwt.verify(token, config.secret, function (err, decoded) {
                     err ? reject('Invalid Token') : resolve(decoded.user_id);
@@ -125,29 +147,47 @@ function onConnection(connection) {
         }
 
         function signIn(clientId) {
+            debug('signIn(' + clientId + ')');
             connections[clientId] = connection;
             connection.clientId = clientId;
             var client = new socketEvent.Client(clientId);
             client.on('message', function (msg) {
-                socketWriter(connection, msg);
+                socketWriter(connection, {
+                    type: 'message',
+                    data: msg
+                });
             });
-            socketWriter(connection, 'Sign In Success');
+            socketWriter(connection, {
+                type: 'info',
+                data: 'Sign In Success\n'
+            });
             return Promise.resolve(clientId);
         }
 
         function checkUnsendMsg(clientId) {
+            debug('checkUnsendMsg(' + clientId + ')');
             return Message.find({
                 receiver_id: clientId
             }).exec()
             .then(function (msgs) {
-                socketWriter(connection, msgs);
+                debug('unsend: ' + msgs);
+                if (!msgs.empty) {
+                    socketWriter(connection, {
+                        type: 'message',
+                        data: msgs
+                    });
+                }
+                return Promise.resolve();
             });
         }
 
         function sendError(error) {
-            socketWriter(connection, error);
+            debug('sendError(' + error + ')');
+            socketWriter(connection, {
+                type: 'info',
+                data: error
+            });
         }
-
     }
 
 }
@@ -213,6 +253,10 @@ function onConnection(connection) {
 
 function socketWriter(s, d) {
     if (s && d) {
-        s.write(d);
+        if (typeof d === 'object') {
+            s.write(JSON.stringify(d));
+        } else {
+            s.write(d);
+        }
     }
 }

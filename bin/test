@@ -8,15 +8,18 @@ var querystring = require('querystring');
 var mongoose = require('mongoose');
 var jwt = require('jsonwebtoken');
 var socketEvent = require('../utils/socketEvent');
+var SocketBuffer = require('../utils/socketBuffer');
+var net = require('net');
 
 // Use ES6 Promises in Mongoose.
 mongoose.Promise = Promise;
 
 var User = require('../models/user');
 
-function httpGet(headers, path, query) {
-    var qString = typeof query === 'string' ? query : querystring.stringify(query);
-    headers = (typeof headers === 'object' && headers != null) ? headers : {};
+function httpGet(options) {
+    var path = (options.path && typeof options.path === 'string') ? options.path : '/';
+    var qString = (options.query && typeof options.query === 'string') ? options.query : querystring.stringify(options.query);
+    var headers = (typeof options.headers === 'object' && options.headers) ? options.headers : {};
     var options = {
         hostname: 'localhost',
         port: 3000,
@@ -44,11 +47,13 @@ function httpGet(headers, path, query) {
     });
 }
 
-function httpPost(headers, path, query, data) {
-    var qString = typeof query === 'string' ? query : querystring.stringify(query),
-        dString = typeof data === 'string' ? data : querystring.stringify(data);
-    headers = (typeof headers === 'object' && headers != null) ? headers : {};
+function httpPost(options) {
+    var path = (options.path && typeof options.path === 'string') ? options.path : '/';
+    var qString = (options.query && typeof options.query === 'string') ? options.query : querystring.stringify(options.query);
+    var dString = typeof options.data === 'string' ? options.data : JSON.stringify(options.data);
+    var headers = (options.headers && typeof options.headers === 'object') ? options.headers : {};
     headers['Content-Length'] = dString.length;
+    headers['Content-Type'] = 'application/json';
     var options = {
         hostname: 'localhost',
         port: 3000,
@@ -78,7 +83,18 @@ function httpPost(headers, path, query, data) {
     });
 }
 
-var userId, token;
+function socketWriter(s, d) {
+    if (s && d) {
+        if (typeof d === 'object') {
+            s.write(JSON.stringify(d));
+        } else {
+            s.write(d);
+        }
+    }
+}
+
+var userId1, token1;
+var userId2, token2;
 
 before(function (done) {
     mongoose.connect(config.dbpath);
@@ -123,18 +139,36 @@ describe('utils/socketEvent', function () {
 });
 describe('注册', function () {
     it('正常注册', function() {
-        var postData = {
+        var postData1 = {
             username: 'tidyzq',
             password: '123456'
         };
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        var p1 = httpPost({
+            path: '/users',
+            data: postData1
+        })
         .then(function (res) {
            assert.equal(200, res.statusCode);
         });
+        var postData2 = {
+            username: 'perqin',
+            password: '654321'
+        };
+        var p2 = httpPost({
+            path: '/users',
+            data: postData2
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+        });
+        return Promise.all([p1, p2]);
     });
     it('空参数', function () {
         var postData = {};
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        return httpPost({
+            path: '/users',
+            data: postData
+        })
         .then(function (res) {
             assert.equal(400, res.statusCode);
         });
@@ -144,7 +178,10 @@ describe('注册', function () {
             username: '',
             password: '',
         };
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        return httpPost({
+            path: '/users',
+            data: postData
+        })
         .then(function (res) {
             assert.equal(400, res.statusCode);
         });
@@ -154,7 +191,10 @@ describe('注册', function () {
             username: 'tidyzq',
             password: '123'
         };
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/users', null, postData)
+        return httpPost({
+            path: '/users',
+            data: postData
+        })
         .then(function (res) {
            assert.equal(409, res.statusCode);
            return User.findOne({
@@ -170,31 +210,61 @@ describe('注册', function () {
 });
 describe('登录', function () {
     it('正常登陆', function () {
-        var postData = {
+        var postData1 = {
             username: 'tidyzq',
             password: '123456'
         }
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+        var p1 = httpPost({
+            path: '/auth/login',
+            data: postData1
+        })
         .then(function (res) {
             assert.equal(200, res.statusCode);
             var msg = JSON.parse(res.body);
-            token = msg.jwt;
-            assert(token);
+            token1 = msg.jwt;
+            assert(token1);
             return new Promise(function (resolve, reject) {
                 jwt.verify(msg.jwt, config.secret, function (err, decoded) {
                     assert.ifError(err);
-                    assert.equal(userId, decoded.user_id);
+                    assert.ok(decoded.user_id);
+                    userId1 = decoded.user_id;
                     resolve();
                 });
             });
         });
+        var postData2 = {
+            username: 'perqin',
+            password: '654321'
+        }
+        var p2 = httpPost({
+            path: '/auth/login',
+            data: postData2
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var msg = JSON.parse(res.body);
+            token2 = msg.jwt;
+            assert(token2);
+            return new Promise(function (resolve, reject) {
+                jwt.verify(msg.jwt, config.secret, function (err, decoded) {
+                    assert.ifError(err);
+                    assert.ok(decoded.user_id);
+                    userId2 = decoded.user_id;
+                    resolve();
+                });
+            });
+        });
+        return Promise.all([p1, p2]);
     });
     it('错误登陆', function () {
         var postData = {
             username: 'tidyzq',
             password: '123'
         }
-        return httpPost({'Content-Type': 'application/x-www-form-urlencoded'}, '/auth/login', null, postData)
+        return httpPost({
+            path: '/auth/login',
+            data: postData
+        })
         .then(function (res) {
             assert.equal(401, res.statusCode);
         });
@@ -203,8 +273,11 @@ describe('登录', function () {
 describe('获取用户信息', function () {
     it('正常获取', function () {
         return httpGet({
-            Authorization: token
-        }, '/users/' + userId, null)
+            headers: {
+                Authorization: token1
+            },
+            path: '/users/' + userId1
+        })
         .then(function (res) {
             assert.equal(200, res.statusCode);
             var user = JSON.parse(res.body);
@@ -216,9 +289,13 @@ describe('获取用户信息', function () {
     });
     it('附带联系人', function () {
         return httpGet({
-            Authorization: token
-        }, '/users/' + userId, {
-            with_contacts: true
+            headers: {
+                Authorization: token1
+            },
+            path: '/users/' + userId1,
+            query: {
+                with_contacts: true
+            }
         })
         .then(function (res) {
             assert.equal(200, res.statusCode);
@@ -230,33 +307,271 @@ describe('获取用户信息', function () {
         });
     });
     it('无token获取', function () {
-        return httpGet(null, '/users/' + userId, null)
+        return httpGet({
+            path: '/users/' + userId1
+        })
         .then(function (res) {
             assert.equal(401, res.statusCode);
         });
     });
     it('获取错误id', function () {
-        return httpGet(null, '/users/111111111111111111111111', null)
+        return httpGet({
+            path: '/users/111111111111111111111111'
+        })
         .then(function (res) {
             assert.equal(401, res.statusCode);
         });
     });
 });
+describe('添加联系人', function () {
+    it('正常添加', function () {
+        var p1 = httpPost({
+            headers: {
+                Authorization: token1
+            },
+            path: '/users/' + userId1 + '/contacts',
+            data: {
+                user_id: userId2
+            }
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+        });
+        var p2 = httpPost({
+            headers: {
+                Authorization: token2
+            },
+            path: '/users/' + userId2 + '/contacts',
+            data: {
+                user_id: userId1
+            }
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+        });
+        return Promise.all([p1, p2]);
+    });
+    it('无token', function () {
+        return httpPost({
+            path: '/users/' + userId1 + '/contacts',
+            data: {
+                user_id: userId2
+            }
+        })
+        .then(function (res) {
+            assert(401, res.statusCode);
+        });
+    });
+    it('错误用户id', function () {
+        return httpPost({
+            headers: {
+                Authorization: token1
+            },
+            path: '/users/' + userId1 + '/contacts',
+            data: {
+                user_id: '111111111111111111111111'
+            }
+        })
+        .then(function (res) {
+            assert(404, res.statusCode);
+        });
+    });
+});
 describe('获取用户联系人', function () {
     it('正常获取', function () {
-        return httpGet({
-            Authorization: token
-        }, '/users/' + userId + '/contacts', null)
+        var p1 = httpGet({
+            headers: {
+                Authorization: token1
+            },
+            path: '/users/' + userId1 + '/contacts'
+        })
         .then(function (res) {
             assert.equal(200, res.statusCode);
             var user = JSON.parse(res.body);
-            assert(user.contacts);
+            assert.ok(user.contacts);
+            assert(user.contacts.some(function (item) {
+                return item.user_id == userId2
+            }));
         });
+        var p2 = httpGet({
+            headers: {
+                Authorization: token2
+            },
+            path: '/users/' + userId2 + '/contacts'
+        })
+        .then(function (res) {
+            assert.equal(200, res.statusCode);
+            var user = JSON.parse(res.body);
+            assert.ok(user.contacts);
+            assert(user.contacts.some(function (item) {
+                return item.user_id == userId1
+            }));
+        });
+        return Promise.all([p1, p2]);
     });
     it('无token获取', function () {
-        return httpGet(null, '/users/' + userId + '/contacts', null)
+        return httpGet({
+            path: '/users/' + userId1 + '/contacts'
+        })
         .then(function (res) {
             assert.equal(401, res.statusCode);
         });
+    });
+});
+var socket1, socket2;
+var socketBuffer1, socketBuffer2;
+describe('socket连接', function () {
+    it('连接', function () {
+        var p1 = new Promise(function (resolve, reject) {
+            var client = net.createConnection({ port: 3001 });
+            var socketBuffer = new SocketBuffer();
+            socketBuffer.on('packet', function (packet) {
+                debug(packet);
+                client.end();
+            });
+            client.on('data', function (data) {
+                socketBuffer.addBuffer(data);
+            });
+            client.on('end', function () {
+                resolve();
+            });
+        });
+        var p2 = new Promise(function (resolve, reject) {
+            var client = net.createConnection({ port: 3001 });
+            var socketBuffer = new SocketBuffer();
+            socketBuffer.on('packet', function (packet) {
+                debug(packet);
+                client.end();
+            });
+            client.on('data', function (data) {
+                socketBuffer.addBuffer(data);
+            });
+            client.on('end', function () {
+                resolve();
+            });
+        });
+        return Promise.all([p1, p2]);
+    });
+    it('登陆', function () {
+        var p1 = new Promise(function (resolve, reject) {
+            var client = net.createConnection({ port: 3001 }, function () {
+                socketWriter(client, {
+                    type: 'token',
+                    data: token1
+                });
+                var socketBuffer = new SocketBuffer();
+                socketBuffer.on('packet', function (packet) {
+                    debug(packet);
+                    if (packet.type == 'info' && packet.data == 'Sign In Success\n') {
+                        client.end();
+                    }
+                });
+                client.on('data', function (data) {
+                    socketBuffer.addBuffer(data);
+                });
+                client.on('end', function () {
+                    resolve();
+                });
+            });
+        });
+        var p2 = new Promise(function (resolve, reject) {
+            var client = net.createConnection({ port: 3001 }, function () {
+                socketWriter(client, {
+                    type: 'token',
+                    data: token2
+                });
+                var socketBuffer = new SocketBuffer();
+                socketBuffer.on('packet', function (packet) {
+                    debug(packet);
+                    if (packet.type == 'info' && packet.data == 'Sign In Success\n') {
+                        client.end();
+                    }
+                });
+                client.on('data', function (data) {
+                    socketBuffer.addBuffer(data);
+                });
+                client.on('end', function () {
+                    resolve();
+                });
+            });
+        });
+        return Promise.all([p1, p2]);
+    });
+    it('建立长连接', function () {
+        var p1 = new Promise(function (resolve, reject) {
+            socket1 = net.createConnection({ port: 3001 }, function () {
+                socketWriter(socket1, {
+                    type: 'token',
+                    data: token1
+                });
+                socket1['heart'] = setInterval(function () {
+                    socketWriter(socket1, {
+                        type: 'heart'
+                    });
+                }, 30 * 1000); // 30s
+                socketBuffer1 = new SocketBuffer();
+                socket1.on('data', function (data) {
+                    socketBuffer1.addBuffer(data);
+                });
+                socket1.on('end', function () {
+                    clearInterval(socket1['heart']);
+                    debug('socket1 end');
+                });
+                resolve();
+            });
+        });
+        var p2 = new Promise(function (resolve, reject) {
+            socket2 = net.createConnection({ port: 3001 }, function () {
+                socketWriter(socket2, {
+                    type: 'token',
+                    data: token2
+                });
+                socket2['heart'] = setInterval(function () {
+                    socketWriter(socket2, {
+                        type: 'heart'
+                    });
+                }, 30 * 1000); // 30s
+                socketBuffer2 = new SocketBuffer();
+                socket2.on('data', function (data) {
+                    socketBuffer2.addBuffer(data);
+                });
+                socket2.on('end', function () {
+                    clearInterval(socket2['heart']);
+                    debug('socket2 end');
+                });
+                resolve();
+            });
+        });
+        return Promise.all([p1, p2]);
+    });
+});
+describe('消息', function () {
+    it('发送消息', function () {
+        var p1 = httpPost({
+            headers: {
+                Authorization: token1
+            },
+            path: '/message',
+            data: {
+                sender_id: userId1,
+                receiver_id: userId2,
+                content: {
+                    type: 0,
+                    plain: 'Hello World'
+                }
+            }
+        })
+        .then(function (res) {
+            assert(200, res.statusCode);
+        });
+        var p2 = new Promise(function (resolve, reject) {
+            socketBuffer2.on('packet', function (packet) {
+                if (packet.type == 'message') {
+                    debug(packet);
+                    resolve();
+                }
+            });
+        });
+        return Promise.all([p1, p2]);
     });
 });

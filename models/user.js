@@ -11,6 +11,7 @@ var contactSchema = new Schema({
     remark: {type: String, required: false, validate: V.remark},
     block_level: {type: Number, default: 0, required: true, validate: V.blockLevel}
 }, {
+    _id: false,
     versionKey: false
 });
 
