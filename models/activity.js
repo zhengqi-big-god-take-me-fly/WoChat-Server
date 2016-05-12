@@ -4,23 +4,25 @@ var mongoose = require('mongoose');
 var V = require('../utils/validator');
 var Schema = mongoose.Schema;
 var ObjectId = Schema.Types.ObjectId;
+
 var activitySchema = new Schema({
     // _id: ObjectId,
-    content: {
-        type: { type: Number, required: true, validate: V.activityContentType },
-        text: { type: String, validate: V.activityContentText },
-        images: Array[String]
-    },
-    time: { type: Number, required: true, validate: V.timestamp },
-    likes: Array[{
-        user_id: { type: ObjectId, required: true, validate: V.userId },
-        time: { type: Number, required: true, validate: V.timestamp }
+    owner: { type: ObjectId, required: true, validate: V.id },
+    type: { type: Number, required: true, validate: V.messageType },
+    text: { type: String, validate: V.messageContent },
+    images: [
+        { type: String, required: true }
+    ],
+    time: { type: Number, required: true, validate: V.time },
+    likes: [{
+        user: { type: ObjectId, required: true, validate: V.id },
+        time: { type: Number, required: true, validate: V.time }
     }],
-    comments: Array[{
-        user_id: { type: ObjectId, required: true, validate: V.userId },
-        time: { type: Number, required: true, validate: V.timestamp },
-        text: { type: String, validate: V.activityCommentText },
-        reply_to_id: { type: ObjectId, required: true, validate: V.userId }
+    comments: [{
+        user: { type: ObjectId, required: true, validate: V.id },
+        time: { type: Number, required: true, validate: V.time },
+        text: { type: String, required: true, validate: V.messageContent },
+        reply_to: { type: ObjectId, required: false, validate: V.id }
     }]
 }, {
     versionKey: false

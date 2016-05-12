@@ -64,21 +64,22 @@ router.post('/login', function(req, res, next) {
     .catch(debug);
 
     function findUser() {
-        debug('createUser');
+        debug('findUser', username);
         return User.findOne({
-            username: username,
-            password: password
+            username: username
         }).exec()
         .then(function (doc) {
-            return doc ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Invalid username or wrong password'));
+            return (doc && doc.password == password) ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Invalid username or wrong password'));
         });
     }
 
     function sendResult(doc) {
         debug('sendResult');
         var payload = {
-            user_id: doc._id
+            user_id: doc._id,
+            username: doc.username
         };
+        debug('jwt payload:', payload);
         res.json({
             jwt: jwt.sign(payload, config.secret)
         });

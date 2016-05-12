@@ -3,53 +3,38 @@
 var ObjectId = require('mongoose').Types.ObjectId;
 
 module.exports = {
-    activityCommentText: activityCommentText,
-    activityContentText: activityContentText,
-    activityContentType: activityContentType,
     avatar: avatar,
     gender: gender,
-    messageContentPlain: messageContentPlain,
-    messageContentType: messageContentType,
+    messageContent: messageContent,
+    messageType: messageType,
     nickname: nickname,
     password: password,
     region: region,
-    timestamp: timestamp,
-    userId: userId,
+    time: time,
+    id: id,
     username: username,
     remark: remark,
     blockLevel: blockLevel
 };
 
-function activityCommentText(act) {
-    return true;
-}
-
-function activityContentText(act) {
-    return true;
-}
-
-function activityContentType(act) {
-    return true;
-}
-
 function avatar(a) {
-    return true;
+    return typeof a === 'string';
 }
 
 function gender(g) {
-    return true;
+    return Number.isInteger(g) && g >= 0;
 }
 
-function messageContentPlain(mcp) {
-    return true;
+function messageContent(mc) {
+    return typeof mc === 'string';
 }
 
-function messageContentType(mct) {
-    return true;
+function messageType(mt) {
+    return Number.isInteger(mt) && mt >= 0;
 }
 
 function nickname(n) {
-    return true;
+    return typeof n === 'string';
 }
 
 function password(p) {
@@ -57,14 +42,14 @@ function password(p) {
 }
 
 function region(r) {
-    return true;
+    return Number.isInteger(r) && r >= 0;
 }
 
-function timestamp(t) {
-    return true;
+function time(t) {
+    return Number.isInteger(t) && t >= 0;
 }
 
-function userId(ui) {
+function id(ui) {
     return ui && (ui instanceof ObjectId || (typeof ui === 'string' && /^[0-9a-f]{24}$/i.test(ui)));
 }
 
@@ -73,7 +58,7 @@ function username(u) {
 }
 
 function remark(rm) {
-    return true;
+    return typeof rm === 'string';
 }
 
 function blockLevel(bl) {
