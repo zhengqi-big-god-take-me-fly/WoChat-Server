@@ -5,11 +5,14 @@ var validator = require('../utils/validator');
 function socketWriter(s, d) {
     debug('sending: ', d);
     if (s && s.write && d) {
+        var str;
         if (typeof d === 'object') {
-            s.write(JSON.stringify(d));
+            str = JSON.stringify(d);
         } else {
-            s.write(d);
+            str = d;
         }
+        str += '/n/n';
+        s.write(str);
     }
 }
 
