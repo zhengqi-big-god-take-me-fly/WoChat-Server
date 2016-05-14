@@ -134,6 +134,7 @@ router.get(/^\/([^\/]+)$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).select('groupname members')
@@ -182,6 +183,7 @@ router.put(/^\/([^\/]+)$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId,
         }).exec()
@@ -233,6 +235,7 @@ router.get(/^\/([^\/]+)\/members$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).populate({
@@ -275,6 +278,7 @@ router.post(/^\/([^\/]+)\/members$/, function(req, res, next) {
     verifyToken(token)
     .then(findGroup)
     .then(verifyMember)
+    .then(verifyNotMember)
     .then(findUser)
     .then(verifyContact)
     .then(addToGroup)
@@ -288,6 +292,7 @@ router.post(/^\/([^\/]+)\/members$/, function(req, res, next) {
         userId = decoded.user_id;
         username = decoded.username;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).exec()
@@ -302,6 +307,15 @@ router.post(/^\/([^\/]+)\/members$/, function(req, res, next) {
         return doc.members.some(function (item) {
             return item.member == userId;
         }) ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Not member'));
+    }
+
+    function verifyNotMember(doc) {
+        debug('verifyNotMember', doc.members);
+        return doc.members.every(function (item) {
+            return members.find(function (addId) {
+                return addId == item.member;
+            }) == undefined;
+        }) ? Promise.resolve(doc) : Promise.reject(new Response(409, 'Already is member'));
     }
 
     function findUser() {
@@ -345,7 +359,10 @@ router.post(/^\/([^\/]+)\/members$/, function(req, res, next) {
                     chat_group: group._id
                 }
             }
-        }).exec();
+        }, { multi: true }).exec()
+        .then(function (info) {
+            debug(info);
+        });
     }
 
     function sendResult() {
@@ -383,6 +400,7 @@ router.put(/^\/([^\/]+)\/members\/([^\/]+)$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).select('members')
@@ -395,7 +413,7 @@ router.put(/^\/([^\/]+)\/members\/([^\/]+)$/, function(req, res, next) {
         debug('verifyMember', doc.members);
         return doc.members.some(function (item) {
             return item.member == userId;
-        }) ? Promise.resolve() : Promise.reject(new Response(401, 'Not member'));
+        }) ? Promise.resolve() : Promise.reject(new Response(404, 'No such member'));
     }
 
     function updateGroup() {
@@ -440,6 +458,7 @@ router.delete(/^\/([^\/]+)\/members\/([^\/]+)$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).exec()
@@ -452,7 +471,7 @@ router.delete(/^\/([^\/]+)\/members\/([^\/]+)$/, function(req, res, next) {
         debug('verifyMember', doc.members);
         return doc.members.some(function (item) {
             return item.member == userId;
-        }) ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Not member'));
+        }) ? Promise.resolve(doc) : Promise.reject(new Response(404, 'No such member'));
     }
 
     function deleteFromChatGroup(doc) {
@@ -460,7 +479,7 @@ router.delete(/^\/([^\/]+)\/members\/([^\/]+)$/, function(req, res, next) {
         doc.members.pull({
             member: userId
         });
-        if (doc.members.length == 0) {
+        if (doc.members.length == 1) {
             debug('deleting:', doc);
             return doc.remove();
         } else {
@@ -520,6 +539,7 @@ router.post(/^\/([^\/]+)\/messages$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).select('members')
@@ -552,7 +572,7 @@ router.post(/^\/([^\/]+)\/messages$/, function(req, res, next) {
             content: content,
             unread: members
         });
-        return message.save();
+        return members.length == 0 ? Promise.resolve(message) : message.save();
     }
 
     function sendMessage(message) {

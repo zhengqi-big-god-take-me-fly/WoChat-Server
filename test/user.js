@@ -472,9 +472,79 @@ module.exports = function () {
                 assert.ifError(message.unread);
             });
         });
+        it('无token', function () {
+            return httpPost({
+                path: '/users/perqin/message',
+                data: {
+                    type: 0,
+                    content: 'hello sb teacher chang'
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('参数错误', function () {
+            var p1 = httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqin/message',
+                data: {
+                    type: 'hello',
+                    content: 'hello sb teacher chang'
+                }
+            })
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+            var p2 = httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqin/message',
+                data: {
+                    type: 0
+                }
+            })
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+            return Promise.all([p1, p2]);
+        });
+        it('非好友', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/souler/message',
+                data: {
+                    type: 0,
+                    content: 'hello mam god'
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('错误用户名', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqinnn/message',
+                data: {
+                    type: 0,
+                    content: 'hello sb teacher chang'
+                }
+            })
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
     });
-    describe.skip('删除联系人', function () {
-        it('正常修改', function () {
+    describe('删除联系人', function () {
+        it('正常删除', function () {
             return httpDelete({
                 headers: {
                     Authorization: token1
@@ -512,6 +582,94 @@ module.exports = function () {
                     }));
                 });
                 return Promise.all([p1, p2]);
+            });
+        });
+        it('无token', function () {
+            return httpDelete({
+                path: '/users/tidyzq/contacts/perqin'
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('非好友', function () {
+            return httpDelete({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/tidyzq/contacts/souler'
+            })
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
+        it('错误用户名', function () {
+            return httpDelete({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/tidyzq/contacts/perqinnn'
+            })
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
+    });
+    describe('添加好友关系', function () {
+        it('用户1和用户2', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqin/invitation',
+                data: {
+                    message: 'hello'
+                }
+            })
+            .then(function (res) {
+                assert.equal(201, res.statusCode);
+                var inviteToken = JSON.parse(res.body).inviteToken;
+                assert(inviteToken);
+                return httpPut({
+                    headers: {
+                        Authorization: token2
+                    },
+                    path: '/users/perqin/invitation',
+                    data: {
+                        invitation: inviteToken
+                    }
+                })
+                .then(function (res) {
+                    assert.equal(200, res.statusCode);
+                });
+            });
+        });
+        it('用户1和用户3', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/souler/invitation',
+                data: {
+                    message: 'hello'
+                }
+            })
+            .then(function (res) {
+                assert.equal(201, res.statusCode);
+                var inviteToken = JSON.parse(res.body).inviteToken;
+                assert(inviteToken);
+                return httpPut({
+                    headers: {
+                        Authorization: token3
+                    },
+                    path: '/users/souler/invitation',
+                    data: {
+                        invitation: inviteToken
+                    }
+                })
+                .then(function (res) {
+                    assert.equal(200, res.statusCode);
+                });
             });
         });
     });

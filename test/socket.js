@@ -20,7 +20,7 @@ module.exports = function () {
                     password: '123456'
                 }
             }).then(function (res) {
-                assert(200, res.statusCode);
+                assert.equal(200, res.statusCode);
                 var data = JSON.parse(res.body);
                 assert(data.jwt);
                 token1 = data.jwt;
@@ -37,7 +37,7 @@ module.exports = function () {
                     password: '654321'
                 }
             }).then(function (res) {
-                assert(200, res.statusCode);
+                assert.equal(200, res.statusCode);
                 var data = JSON.parse(res.body);
                 assert(data.jwt);
                 token2 = data.jwt;
@@ -159,7 +159,7 @@ module.exports = function () {
                     } else if ('authrst' == packet.type) {
                         assert.equal(0, packet.data.code);
                     } else if ('msg' == packet.type) {
-                        assert.equal(2, packet.data.length);
+                        assert.equal(3, packet.data.length);
                         socketWriter(connection, {
                             type: 'msgrcpt',
                             data: [
@@ -201,15 +201,22 @@ module.exports = function () {
                         });
                     } else if ('msg' == packet.type) {
                         assert.equal(1, packet.data.length);
-                        assert.equal('teacher chang is sb', packet.data[0].content);
-                        socketWriter(connection, {
-                            type: 'msgrcpt',
-                            data: [
-                                packet.data[0]._id,
-                            ]
-                        });
-                        connection.end();
-                        resolve();
+                        if (packet.data[0].type == 2) {
+                            socketWriter(connection, {
+                                type: 'msgrcpt',
+                                data: [packet.data[0]._id]
+                            });
+                        } else {
+                            assert.equal('teacher chang is sb', packet.data[0].content);
+                            socketWriter(connection, {
+                                type: 'msgrcpt',
+                                data: [
+                                    packet.data[0]._id,
+                                ]
+                            });
+                            connection.end();
+                            resolve();
+                        }
                     }
                 });
             });

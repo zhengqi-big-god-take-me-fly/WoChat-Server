@@ -455,6 +455,7 @@ router.put(/^\/([^\/]+)\/chat_groups\/([^\/]+)$/, function(req, res, next) {
 
     function updateGroup() {
         debug('updateGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return User.findOneAndUpdate({
             username: username,
             'chat_groups.chat_group': groupId
@@ -499,6 +500,7 @@ router.delete(/^\/([^\/]+)\/chat_groups\/([^\/]+)$/, function(req, res, next) {
     function findGroup(decoded) {
         userId = decoded.user_id;
         debug('findGroup:', groupId);
+        if (!validator.id(groupId)) return Promise.reject(new Response(404, 'Invalid group id'));
         return ChatGroup.findOne({
             _id: groupId
         }).exec()
@@ -753,7 +755,7 @@ router.post(/^\/([^\/]+)\/message$/, function(req, res, next) {
                 receiverId = doc._id;
                 return doc.contacts.some(function (item) {
                     return item.contact == senderId;
-                }) ? Promise.resolve() : Promise.reject(401, 'Not contact');
+                }) ? Promise.resolve() : Promise.reject(new Response(401, 'Not contact'));
             } else {
                 return Promise.reject(new Response(404, 'User not found'));
             }
