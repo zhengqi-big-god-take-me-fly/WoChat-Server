@@ -2,6 +2,7 @@
 
 var mongoose = require('mongoose');
 var V = require('../utils/validator');
+var config = require('../utils/config');
 var Schema = mongoose.Schema;
 var ObjectId = Schema.Types.ObjectId;
 
@@ -34,7 +35,7 @@ var userSchema = new Schema({
     username: { type: String, required: true, unique: true, index: true, validate: V.username },
     nickname: { type: String, required: true, validate: V.nickname },
     password: { type: String, required: true, validate: V.password },
-    avatar: { type: String, default: 'http://avatar.com/avatar.png', required: true, validate: V.avatar },
+    avatar: { type: String, default: config.url + '/avatar/default.png', required: true, validate: V.avatar },
     gender: { type: Number, default: 0, required: true, validate: V.gender },
     region: { type: Number, default: 0, required: true, validate: V.region },
     contacts: [contactSchema],

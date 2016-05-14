@@ -40,9 +40,11 @@ module.exports = function (data, connection) {
             debug('found docs:', docs);
             var promises = [];
             docs.forEach(function (doc) {
-                debug(doc);
+                // debug(doc);
+                // debug(doc.__proto__);
                 doc.unread.pull(connection.clientId);
                 if (doc.unread.length == 0) {
+                    debug('deleting:', doc);
                     promises.push(doc.remove());
                 } else {
                     promises.push(doc.save());

@@ -7,10 +7,12 @@ var mongoose = require('mongoose');
 var config = require('../utils/config');
 var jwt = require('jsonwebtoken');
 var socketEvent = require('../utils/socketEvent');
+var formidable = require('formidable');
+var fs = require('fs');
 
 var User = require('../models/user');
 var Message = require('../models/message');
-var ChatGroup = require('../models/chat_group');
+var ChatGroup = require('../models/chatGroup');
 
 function Response(statusCode, message) {
     this.statusCode = statusCode;
@@ -21,7 +23,7 @@ function verifyToken(token, username) {
     debug('verifyToken:', token);
     return new Promise(function (resolve, reject) {
         jwt.verify(token, config.secret, function (err, decoded) {
-            (!err && (username == undefined || decoded.username == username)) ? resolve(decoded) : reject(new Response(401, 'Invalid Token'));
+            (!err && decoded.user_id && decoded.username && (username == undefined || decoded.username == username)) ? resolve(decoded) : reject(new Response(401, 'Invalid Token'));
         });
     });
 }
@@ -179,6 +181,71 @@ router.put(/^\/([^\/]+)$/, function(req, res, next) {
         debug('sendError: ', error);
         res.status(error.statusCode).end(error.message);
     }
+});
+
+// 添加新头像
+router.post(/^\/([^\/]+)\/avatar$/, function(req, res, next) {
+
+    var username = req.params[0],
+        token = req.get('Authorization');
+
+    verifyToken(token, username)
+    .then(storeImage)
+    .then(updateUser)
+    .then(sendResult)
+    .catch(handleError)
+    .catch(sendError)
+    .catch(debug);
+
+    function storeImage() {
+        var form = new formidable.IncomingForm();
+        form.uploadDir = 'tmp';
+        form.keepExtensions = true;
+        return new Promise(function (resolve, reject) {
+            form.parse(req, function(err, fields, files) {
+                debug("storeImage: " + JSON.stringify(files));
+                files.hasOwnProperty('avatar') ? resolve(files.avatar) : reject(new Response(400, 'Avatar not found'));
+            });
+        }).then(function (avatar) {
+            switch (avatar.type) {
+                case 'image/pjpeg': case 'image/jpeg': case 'image/png': case 'image/x-png':
+                    return Promise.resolve(avatar);
+                default:
+                    return Promise.reject(new Response(400, 'Invalid format'));
+            }
+        }).then(function (avatar) {
+            var path = 'public/avatar/' + username + avatar.name.match(/\.\w+$/)[0];
+            var httpPath = config.url + '/avatar/' + username + avatar.name.match(/\.\w+$/)[0];
+            return new Promise(function (resolve, reject) {
+                fs.rename(avatar.path, path, function(err) {
+                    debug('renamed complete');
+                    err ? reject(err) : resolve(httpPath);
+                });
+            });
+        });
+    }
+
+    function updateUser(avatarPath) {
+        debug('updateUser:', avatarPath);
+        return User.update({
+            username: username
+        }, {
+            $set: {
+                avatar: avatarPath
+            }
+        }).exec();
+    }
+
+    function sendResult() {
+        debug('sendResult');
+        res.status(201).end('Success');
+    }
+
+    function sendError(error) {
+        debug('sendError: ', error);
+        res.status(error.statusCode).end(error.message);
+    }
+
 });
 
 // 获取联系人信息
@@ -350,11 +417,8 @@ router.get(/^\/([^\/]+)\/chat_groups$/, function(req, res, next) {
         return User.findOne({
             username: username
         }).populate({
-            path: 'chat_groups',
-            populate: {
-                path: 'members',
-                select: '_id username nickname avatar'
-            }
+            path: 'chat_groups.chat_group',
+            select: '_id groupname'
         }).select('chat_groups')
         .then(function (doc) {
             return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
@@ -362,7 +426,7 @@ router.get(/^\/([^\/]+)\/chat_groups$/, function(req, res, next) {
     }
 
     function sendResult(doc) {
-        debug('sendResult');
+        debug('sendResult:', doc);
         res.json(doc);
     }
 
@@ -380,36 +444,31 @@ router.put(/^\/([^\/]+)\/chat_groups\/([^\/]+)$/, function(req, res, next) {
         token = req.get('Authorization');
 
     var update = {};
-    if (req.body.hasOwnProperty('block_level')) update['chat_groups.$.block_level'] = req.body.hasOwnProperty.block_level;
+    if (req.body.hasOwnProperty('block_level')) update['chat_groups.$.block_level'] = req.body.block_level;
 
     verifyToken(token, username)
-    .then(changeGroup)
+    .then(updateGroup)
+    .then(sendResult)
     .catch(handleError)
     .catch(sendError)
     .catch(debug);
 
-    function changeGroup() {
-        debug('changeGroup:', groupId);
+    function updateGroup() {
+        debug('updateGroup:', groupId);
         return User.findOneAndUpdate({
             username: username,
             'chat_groups.chat_group': groupId
         }, {
             $set: update
-        }).populate({
-            path: 'chat_groups',
-            populate: {
-                path: 'members',
-                select: '_id username nickname avatar'
-            }
-        }, { runValidators: true }).exec()
+        }).exec()
         .then(function (doc) {
             return doc ? Promise.resolve() : Promise.reject(new Response(404, 'User or chat group not found'));
         });
     }
 
-    function sendResult(doc) {
+    function sendResult() {
         debug('sendResult');
-        res.end('Success');
+        res.status(200).end('Success');
     }
 
     function sendError(error) {
@@ -425,28 +484,47 @@ router.delete(/^\/([^\/]+)\/chat_groups\/([^\/]+)$/, function(req, res, next) {
         groupId = req.params[1],
         token = req.get('Authorization');
 
+    var userId;
+
     verifyToken(token, username)
+    .then(findGroup)
+    .then(verifyMember)
     .then(deleteFromChatGroup)
     .then(deleteFromUser)
+    .then(sendResult)
     .catch(handleError)
     .catch(sendError)
     .catch(debug);
 
-    function deleteFromChatGroup(decoded) {
-        debug('deleteFromUser:', username);
-        return ChatGroup.findOneAndUpdate({
-            _id: groupId,
-            'members.member': decoded.user_id
-        }, {
-            $pull: {
-                members: {
-                    member: decoded.user_id
-                }
-            }
-        }).select('_id')
+    function findGroup(decoded) {
+        userId = decoded.user_id;
+        debug('findGroup:', groupId);
+        return ChatGroup.findOne({
+            _id: groupId
+        }).exec()
         .then(function (doc) {
-            return doc ? Promise.resolve() : Promise.reject(new Response(404, 'User or chat group not found'));
+            return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'Chat group not found'));
         });
+    }
+
+    function verifyMember(doc) {
+        debug('verifyMember', doc.members);
+        return doc.members.some(function (item) {
+            return item.member == userId;
+        }) ? Promise.resolve(doc) : Promise.reject(new Response(401, 'Not member'));
+    }
+
+    function deleteFromChatGroup(doc) {
+        debug('deleteFromChatGroup:', username);
+        doc.members.pull({
+            member: userId
+        });
+        if (doc.members.length == 0) {
+            debug('deleting:', doc);
+            return doc.remove();
+        } else {
+            return doc.save();
+        }
     }
 
     function deleteFromUser() {
@@ -466,9 +544,9 @@ router.delete(/^\/([^\/]+)\/chat_groups\/([^\/]+)$/, function(req, res, next) {
         });
     }
 
-    function sendResult(doc) {
+    function sendResult() {
         debug('sendResult');
-        res.end('Success');
+        res.status(200).end('Success');
     }
 
     function sendError(error) {
@@ -573,8 +651,10 @@ router.put(/^\/([^\/]+)\/invitation$/, function(req, res, next) {
 
     verifyToken(token, username)
     .then(verifyInvitation)
-    .then(addToSender)
+    .then(findUser)
+    .then(checkNotContact)
     .then(addToReceiver)
+    .then(addToSender)
     .then(sendResult)
     .catch(handleError)
     .catch(sendError)
@@ -595,6 +675,31 @@ router.put(/^\/([^\/]+)\/invitation$/, function(req, res, next) {
         });
     }
 
+    function findUser() {
+        debug('findUser:', username);
+        return User.findOne({
+            username: username
+        }).exec()
+        .then(function (doc) {
+            return doc ? Promise.resolve(doc) : Promise.reject(new Response(404, 'User not found'));
+        });
+    }
+
+    function checkNotContact(user) {
+        debug('checkNotContact:', user.contacts);
+        return user.contacts.every(function (item) {
+            return item.contact != senderId;
+        }) ? Promise.resolve(user) : Promise.reject(new Response(409, 'Already your contact'));
+    }
+
+    function addToReceiver(receiver) {
+        debug('addToReceiver:', receiverId);
+        receiver.contacts.push({
+            contact: senderId
+        });
+        return receiver.save();
+    }
+
     function addToSender() {
         debug('addToSender:', senderId);
         return User.findOneAndUpdate({
@@ -606,25 +711,6 @@ router.put(/^\/([^\/]+)\/invitation$/, function(req, res, next) {
                 }
             }
         }).exec()
-        .then(function (doc) {
-            return doc ? Promise.resolve() : Promise.reject(new Response(404, 'Sender not found'));
-        });
-    }
-
-    function addToReceiver() {
-        debug('addToReceiver:', receiverId);
-        return User.findOneAndUpdate({
-            _id: receiverId
-        }, {
-            $push: {
-                contacts: {
-                    contact: senderId
-                }
-            }
-        }).exec()
-        .then(function (doc) {
-            return doc ? Promise.resolve() : Promise.reject(new Response(404, 'Receiver not found'));
-        });
     }
 
     function sendResult() {

@@ -1,13 +1,16 @@
 var http = require('http');
 var querystring = require('querystring');
+var SocketBuffer = require('../utils/socketBuffer');
+var config = require('../utils/config');
+var net = require('net');
 
 function httpGet(options) {
     var path = (options.path && typeof options.path === 'string') ? options.path : '/';
     var qString = (options.query && typeof options.query === 'string') ? options.query : querystring.stringify(options.query);
     var headers = (typeof options.headers === 'object' && options.headers) ? options.headers : {};
     var options = {
-        hostname: 'localhost',
-        port: 3000,
+        hostname: config.hostname,
+        port: config.port.http,
         path: path + (qString == '' ? '' : ('?' + qString)),
         headers: headers
     };
@@ -40,8 +43,8 @@ function httpPost(options) {
     headers['Content-Length'] = dString.length;
     headers['Content-Type'] = 'application/json';
     var options = {
-        hostname: 'localhost',
-        port: 3000,
+        hostname: config.hostname,
+        port: config.port.http,
         path: path + (qString == '' ? '' : ('?' + qString)),
         method: 'POST',
         headers: headers
@@ -76,8 +79,8 @@ function httpPut(options) {
     headers['Content-Length'] = dString.length;
     headers['Content-Type'] = 'application/json';
     var options = {
-        hostname: 'localhost',
-        port: 3000,
+        hostname: config.hostname,
+        port: config.port.http,
         path: path + (qString == '' ? '' : ('?' + qString)),
         method: 'PUT',
         headers: headers
@@ -112,8 +115,8 @@ function httpDelete(options) {
     // headers['Content-Length'] = dString.length;
     headers['Content-Type'] = 'application/json';
     var options = {
-        hostname: 'localhost',
-        port: 3000,
+        hostname: config.hostname,
+        port: config.port.http,
         path: path + (qString == '' ? '' : ('?' + qString)),
         method: 'DELETE',
         headers: headers
@@ -140,6 +143,17 @@ function httpDelete(options) {
     });
 }
 
+function socketConnect(callback) {
+    var connection = net.createConnection({ host: config.hostname, port: config.port.socket });
+    var socketBuffer = new SocketBuffer();
+    socketBuffer.on('packet', function (packet) {
+        callback(connection, packet);
+    });
+    connection.on('data', function (data) {
+        socketBuffer.addBuffer(data);
+    });
+}
+
 function socketWriter(s, d) {
     if (s && d) {
         if (typeof d === 'object') {
@@ -155,5 +169,6 @@ module.exports = {
     httpPost: httpPost,
     httpPut: httpPut,
     httpDelete: httpDelete,
+    socketConnect: socketConnect,
     socketWriter: socketWriter
 };

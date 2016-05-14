@@ -15,10 +15,12 @@ mongoose.Promise = Promise;
 
 var User = require('../models/user');
 var Message = require('../models/message');
+var ChatGroup = require('../models/chatGroup');
 
 var testAuth = require('../test/auth');
 var testUser = require('../test/user');
 var testSocket = require('../test/socket');
+var testChatGroup = require('../test/chatGroup');
 
 before(function (done) {
     mongoose.connect(config.dbpath);
@@ -27,7 +29,8 @@ before(function (done) {
         debug('MongoDB connected');
         var p1 = User.remove({}).exec();
         var p2 = Message.remove({}).exec();
-        Promise.all([p1, p2]).then(function () {
+        var p3 = ChatGroup.remove({}).exec();
+        Promise.all([p1, p2, p3]).then(function () {
             done();
         });
     });
@@ -35,145 +38,5 @@ before(function (done) {
 describe('auth', testAuth);
 describe('user', testUser);
 describe('socket', testSocket);
+describe('chatGroup', testChatGroup);
 
-// describe('消息', function () {
-//     it('发送消息', function () {
-//         var p1 = httpPost({
-//             headers: {
-//                 Authorization: token2
-//             },
-//             path: '/message',
-//             data: {
-//                 sender_id: userId2,
-//                 receiver_id: userId1,
-//                 content: {
-//                     type: 0,
-//                     plain: 'Hello World'
-//                 }
-//             }
-//         })
-//         .then(function (res) {
-//             assert(200, res.statusCode);
-//         });
-//         var p2 = new Promise(function (resolve, reject) {
-//             socketBuffer1.on('packet', function (packet) {
-//                 if (packet.type == 'msg') {
-//                     debug(packet);
-//                     resolve();
-//                 }
-//             });
-//         });
-//         return Promise.all([p1, p2]);
-//     });
-//     it('离线消息', function () {
-//         var getMessage = function () {
-//             return new Promise(function (resolve, reject) {
-//                 var client = net.createConnection({ port: 3001 }, function () {
-//                     socketWriter(client, {
-//                         type: 'auth',
-//                         data: {
-//                             token: token2
-//                         }
-//                     });
-//                     var socketBuffer = new SocketBuffer();
-//                     socketBuffer.on('packet', function (packet) {
-//                         debug(packet);
-//                         if (packet.type == 'msg') {
-//                             assert(packet.data);
-//                             client.end();
-//                             resolve();
-//                         }
-//                     });
-//                     client.on('data', function (data) {
-//                         socketBuffer.addBuffer(data);
-//                     });
-//                     client.on('end', function () {
-//                         resolve();
-//                     });
-//                 });
-//             });
-//         }
-//         return httpPost({
-//             headers: {
-//                 Authorization: token1
-//             },
-//             path: '/message',
-//             data: {
-//                 sender_id: userId1,
-//                 receiver_id: userId2,
-//                 content: {
-//                     type: 0,
-//                     plain: 'off line message'
-//                 }
-//             }
-//         }).then(function (res) {
-//             assert(200, res.statusCode);
-//         }).then(getMessage).then(getMessage);
-//     });
-//     it('消息回执', function () {
-//         return new Promise(function (resolve, reject) {
-//             var client = net.createConnection({ port: 3001 }, function () {
-//                 socketWriter(client, {
-//                     type: 'auth',
-//                     data: {
-//                         token: token2
-//                     }
-//                 });
-//                 var socketBuffer = new SocketBuffer();
-//                 socketBuffer.on('packet', function (packet) {
-//                     debug(packet);
-//                     if (packet.type == 'msg') {
-//                         assert(packet.data.length);
-//                         socketWriter(client, {
-//                             type: 'msgrcpt',
-//                             data: [
-//                                 packet.data[0]._id
-//                             ]
-//                         });
-//                         client.end();
-//                         resolve();
-//                     }
-//                 });
-//                 client.on('data', function (data) {
-//                     socketBuffer.addBuffer(data);
-//                 });
-//                 client.on('end', function () {
-//                     resolve();
-//                 });
-//             });
-//         }).then(function () {
-//             debug('user1: ' + userId1);
-//             debug('token1: ' + token1);
-//             debug('user2: ' + userId2);
-//             debug('token2: ' + token2);
-//             return new Promise(function (resolve, reject) {
-//                 var client = net.createConnection({ port: 3001 }, function () {
-//                     setTimeout(function () {
-//                         client.end();
-//                         resolve();
-//                     }, 500);
-//                     socketWriter(client, {
-//                         type: 'auth',
-//                         data: {
-//                             token: token2
-//                         }
-//                     });
-//                     var socketBuffer = new SocketBuffer();
-//                     socketBuffer.on('packet', function (packet) {
-//                         debug(packet);
-//                         if (packet.type == 'msg') {
-//                             client.end();
-//                             reject();
-//                         }
-//                     });
-//                     client.on('data', function (data) {
-//                         socketBuffer.addBuffer(data);
-//                     });
-//                     client.on('end', function () {
-//                         resolve();
-//                     });
-//                 });
-//             })
-//         });
-//     });
-// });

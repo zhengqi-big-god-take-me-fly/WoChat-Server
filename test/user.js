@@ -6,10 +6,24 @@ var debug = require('debug')('WoChat-Server:test:user');
 var assert = require('assert');
 var jwt = require('jsonwebtoken');
 
-var token1, token2;
+var token1, token2, token3;
 var inviteToken;
 
 module.exports = function () {
+    describe('注册用户', function () {
+        it('用户3', function () {
+            return httpPost({
+                path: '/users',
+                data: {
+                    username: 'souler',
+                    password: '111111'
+                }
+            })
+            .then(function (res) {
+                assert.equal(201, res.statusCode);
+            });
+        });
+    });
     describe('获取用户token', function () {
         it('用户1', function () {
             return httpPost({
@@ -19,7 +33,7 @@ module.exports = function () {
                     password: '123456'
                 }
             }).then(function (res) {
-                assert(200, res.statusCode);
+                assert.equal(200, res.statusCode);
                 var data = JSON.parse(res.body);
                 assert(data.jwt);
                 token1 = data.jwt;
@@ -33,10 +47,24 @@ module.exports = function () {
                     password: '654321'
                 }
             }).then(function (res) {
-                assert(200, res.statusCode);
+                assert.equal(200, res.statusCode);
                 var data = JSON.parse(res.body);
                 assert(data.jwt);
                 token2 = data.jwt;
+            });
+        });
+        it('用户3', function () {
+            return httpPost({
+                path: '/auth/login',
+                data: {
+                    username: 'souler',
+                    password: '111111'
+                }
+            }).then(function (res) {
+                assert.equal(200, res.statusCode);
+                var data = JSON.parse(res.body);
+                assert(data.jwt);
+                token3 = data.jwt;
             });
         });
     });
@@ -171,6 +199,31 @@ module.exports = function () {
                 assert.equal('hello', decoded.message);
             });
         });
+        it('无token', function () {
+            return httpPost({
+                path: '/users/perqin/invitation',
+                data: {
+                    message: 'hello'
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        })
+        it('错误用户', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqinnnn/invitation',
+                data: {
+                    message: 'hello'
+                }
+            })
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
     });
     describe('接受邀请', function () {
         it('正常接受', function () {
@@ -185,6 +238,73 @@ module.exports = function () {
             })
             .then(function (res) {
                 assert.equal(200, res.statusCode);
+            });
+        });
+        it('无token', function () {
+            return httpPut({
+                path: '/users/perqin/invitation',
+                data: {
+                    invitation: inviteToken
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('无邀请token', function () {
+            return httpPut({
+                headers: {
+                    Authorization: token2
+                },
+                path: '/users/perqin/invitation',
+                data: {}
+            })
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
+            });
+        });
+        it('错误用户', function () {
+            return httpPut({
+                headers: {
+                    Authorization: token2
+                },
+                path: '/users/perqinnnn/invitation',
+                data: {
+                    invitation: inviteToken
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('重复接受邀请', function () {
+            return httpPut({
+                headers: {
+                    Authorization: token2
+                },
+                path: '/users/perqin/invitation',
+                data: {
+                    invitation: inviteToken
+                }
+            })
+            .then(function (res) {
+                assert.equal(409, res.statusCode);
+            });
+        });
+    });
+    describe('发送邀请', function () {
+        it('已经是好友', function () {
+            return httpPost({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/perqin/invitation',
+                data: {
+                    message: 'hello'
+                }
+            })
+            .then(function (res) {
+                assert.equal(409, res.statusCode);
             });
         });
     });
@@ -234,6 +354,25 @@ module.exports = function () {
             });
             return Promise.all([p1, p2]);
         });
+        it('无token获取', function () {
+            return httpGet({
+                path: '/users/tidyzq/contacts'
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('错误用户获取', function () {
+            return httpGet({
+                headers: {
+                    Authorization: token2
+                },
+                path: '/users/perqinn/contacts'
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
     });
     describe('修改联系人信息', function () {
         it('正常修改', function () {
@@ -243,7 +382,8 @@ module.exports = function () {
                 },
                 path: '/users/tidyzq/contacts/perqin',
                 data: {
-                    remark: 'teacher chang'
+                    remark: 'teacher chang',
+                    block_level: 1
                 }
             })
             .then(function (res) {
@@ -259,9 +399,51 @@ module.exports = function () {
                     var user = JSON.parse(res.body);
                     assert.ok(user.contacts);
                     assert(user.contacts.some(function (item) {
-                        return item.contact.username == 'perqin' && item.remark == 'teacher chang';
+                        return item.contact.username == 'perqin' && item.remark == 'teacher chang' && item.block_level == 1;
                     }));
                 });
+            });
+        });
+        it('无token', function () {
+            return httpPut({
+                path: '/users/tidyzq/contacts/perqin',
+                data: {
+                    remark: 'teacher chang',
+                    block_level: 1
+                }
+            })
+            .then(function (res) {
+                assert.equal(401, res.statusCode);
+            });
+        });
+        it('错误联系人', function () {
+            return httpPut({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/tidyzq/contacts/souler',
+                data: {
+                    remark: 'man god',
+                    block_level: 1
+                }
+            })
+            .then(function (res) {
+                assert.equal(404, res.statusCode);
+            });
+        });
+        it('参数不符合规范', function () {
+            return httpPut({
+                headers: {
+                    Authorization: token1
+                },
+                path: '/users/tidyzq/contacts/perqin',
+                data: {
+                    remark: 123,
+                    block_level: 1.23
+                }
+            })
+            .then(function (res) {
+                assert.equal(400, res.statusCode);
             });
         });
     });
@@ -333,4 +515,4 @@ module.exports = function () {
             });
         });
     });
-}
+};

@@ -104,7 +104,11 @@ function onAuth(data, connection) {
     function checkUnsendMsg(clientId) {
         debug('checkUnsendMsg(' + clientId + ')');
         return Message.find({
-            receiver: clientId
+            $or: [{
+                receiver: clientId
+            },{
+                unread: clientId
+            }]
         }).select('-unread')
         .then(function (msgs) {
             debug('unsend: ' + msgs);

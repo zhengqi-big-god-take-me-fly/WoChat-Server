@@ -7,7 +7,7 @@ var ObjectId = Schema.Types.ObjectId;
 
 var messageSchema = new Schema({
     // _id: ObjectId,
-    sender: { type: ObjectId, required: true, validate: V.id },
+    sender: { type: ObjectId, required: true, ref: 'User', validate: V.id },
     receiver: { type: ObjectId, required: true, validate: V.id },
     to_group: { type: Boolean, required: true },
     time: { type: Number, required: true, validate: V.time },
